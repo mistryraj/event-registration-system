@@ -1,14 +1,6 @@
 import pytest
 from app import create_app
 
-@pytest.fixture
-def client():
-    app = create_app()
-    app.config['TESTING'] = True
-    app.config['SECRET_KEY'] = 'test_secret_key' 
-    with app.test_client() as client:
-        yield client
-
 # TEST 1: Test that the admin login page loads (GET request)
 def test_admin_login_page_loads(client):
     response = client.get('/admin/login')
