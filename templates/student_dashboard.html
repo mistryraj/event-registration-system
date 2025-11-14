@@ -13,6 +13,14 @@
             padding: 15px; 
             margin-bottom: 15px;
             background-color: #f9f9f9;
+            text-decoration: none; /* NEW: Removes underline from link */
+            color: inherit; /* NEW: Link uses normal text color */
+            display: block; /* NEW: Makes the whole card the link */
+            transition: transform 0.2s;
+        }
+        .event-card:hover { /* NEW: Adds a hover effect */
+            transform: scale(1.02);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
         }
         .event-card h3 { margin-top: 0; }
         .event-card p { font-size: 0.9em; color: #555; }
@@ -25,11 +33,11 @@
     <div class="event-list">
         {% if events %}
             {% for event in events %}
-                <div class="event-card">
+                <a class="event-card" href="{{ url_for('event_details', event_id=event.id) }}">
                     <h3>{{ event.title }}</h3>
                     <small>Date: {{ event.event_date }}</small>
                     <p>{{ event.description }}</p>
-                </div>
+                </a>
             {% endfor %}
         {% else %}
             <p>No events are scheduled at this time. Please check back later.</p>

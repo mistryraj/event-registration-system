@@ -2,54 +2,88 @@ from flask import Flask, render_template, request, redirect, url_for, flash, ses
 from flask_sqlalchemy import SQLAlchemy
 import os
 
-# --- DATABASE SETUP ---
 basedir = os.path.abspath(os.path.dirname(__file__))
-
-# --- MOVED TO TOP LEVEL ---
-# Initialize the SQLAlchemy database extension
 db = SQLAlchemy()
 
-# --- MOVED TO TOP LEVEL: Define the Event Database Model ---
-# This class defines the "events" table in our database
+# --- OLD MODEL ---
 class Event(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(100), nullable=False)
     description = db.Column(db.String(300), nullable=True)
     event_date = db.Column(db.String(20), nullable=False)
-# ------------------------------------------
+    
+    # --- NEW: Relationship to Registrations ---
+    # This links an Event to its registrations
+    registrations = db.relationship('Registration', backref='event', lazy=True)
+
+# --- NEW: Registration Database Model (for SERS-6) ---
+class Registration(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    student_name = db.Column(db.String(100), nullable=False)
+    student_email = db.Column(db.String(100), nullable=False)
+    
+    # This is the "foreign key" that links this to an Event
+    event_id = db.Column(db.Integer, db.ForeignKey('event.id'), nullable=False)
 
 def create_app():
     app = Flask(__name__)
     app.config['SECRET_KEY'] = 'your_super_secret_key_12345'
-    
-    # --- DATABASE CONFIG ---
-    # We tell Flask where to save our SQLite database file
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'events.db')
     
-    # Initialize the app with the database
     db.init_app(app)
-    # ---------------------------
 
-    # --- This is our mock (fake) admin user ---
     ADMIN_USERNAME = 'admin'
     ADMIN_PASSWORD = 'password123'
     
-    # --- Create the database tables ---
-    # This must stay inside the function
     with app.app_context():
-        db.create_all()
-    # ---------------------------------------
+        db.create_all() # This will now create BOTH tables
 
-    # --- UPDATED: Student Dashboard ---
     @app.route('/')
     def home():
-        """
-        This is the main student dashboard.
-        It now queries the real database for all events.
-        """
         all_events = Event.query.all()
         return render_template('student_dashboard.html', events=all_events)
 
+    # --- NEW: Event Details Page (SERS-5) ---
+    @app.route('/event/<int:event_id>')
+    def event_details(event_id):
+        # Find the event by its ID or show a 404 error
+        event = db.get_or_404(Event, event_id)
+        return render_template('event_details.html', event=event)
+
+    # --- NEW: Registration Page (SERS-6) ---
+    @app.route('/register/<int:event_id>', methods=['POST'])
+    def register(event_id):
+        # Find the event this registration is for
+        event = db.get_or_404(Event, event_id)
+        
+        # Get data from the form
+        new_registration = Registration(
+            student_name=request.form['name'],
+            student_email=request.form['email'],
+            event_id=event.id
+        )
+        
+        # Save to database
+        db.session.add(new_registration)
+        db.session.commit()
+        
+        # --- NEW: Mock Email Confirmation (SERS-7) ---
+        # This prints to your terminal, satisfying the requirement
+        print("--- MOCK EMAIL SENT ---")
+        print(f"To: {new_registration.student_email}")
+        print(f"Subject: Confirmation for {event.title}")
+        print(f"Hi {new_registration.student_name}, you are registered!")
+        print("-----------------------")
+        
+        # Redirect to a "success" page
+        return redirect(url_for('registration_success'))
+
+    # --- NEW: Registration Success Page ---
+    @app.route('/register/success')
+    def registration_success():
+        return render_template('registration_success.html')
+
+    # --- Admin Routes Below ---
     @app.route('/admin/login', methods=['GET', 'POST'])
     def admin_login():
         error = None
@@ -69,7 +103,6 @@ def create_app():
     def admin_dashboard():
         return render_template('admin_dashboard.html')
 
-    # --- UPDATED: Create Event ---
     @app.route('/admin/event/create', methods=['GET', 'POST'])
     def create_event():
         if request.method == 'POST':
@@ -79,8 +112,8 @@ def create_app():
                 event_date=request.form['event_date']
             )
             
-            db.session.add(new_event)  # Add to the database session
-            db.session.commit()      # Save the changes to the file
+            db.session.add(new_event)
+            db.session.commit()
             
             return redirect(url_for('admin_dashboard'))
         
