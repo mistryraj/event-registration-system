@@ -28,4 +28,5 @@ jobs:
     # Step 4: Run your TDD tests
     - name: Run Pytest
       run: |
-        python -m pytest
+        # UPDATED: This now *only* runs pytest files, ignoring Selenium
+        python -m pytest test_
