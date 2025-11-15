@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>View Registrations</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; }
+        h1 { color: #333; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid #ccc; padding: 10px; text-align: left; }
+        th { background-color: #f4f4f4; }
+        tr:nth-child(even) { background-color: #f9f9f9; }
+        a { color: #007bff; }
+    </style>
+</head>
+<body>
+    <a href="{{ url_for('admin_dashboard') }}">&larr; Back to Dashboard</a>
+    <h1>All Event Registrations</h1>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Student Name</th>
+                <th>Student Email</th>
+                <th>Event Title</th>
+                <th>Event Date</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% if registrations %}
+                {% for reg in registrations %}
+                    <tr>
+                        <td>{{ reg.student_name }}</td>
+                        <td>{{ reg.student_email }}</td>
+                        <td>{{ reg.event.title }}</td>
+                        <td>{{ reg.event.event_date }}</td>
+                    </tr>
+                {% endfor %}
+            {% else %}
+                <tr>
+                    <td colspan="4" style="text-align: center;">No registrations found.</td>
+                </tr>
+            {% endif %}
+        </tbody>
+    </table>
+</body>
+</html>

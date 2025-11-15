@@ -5,18 +5,17 @@ import os
 basedir = os.path.abspath(os.path.dirname(__file__))
 db = SQLAlchemy()
 
-# --- OLD MODEL ---
+# --- Event Database Model ---
 class Event(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(100), nullable=False)
     description = db.Column(db.String(300), nullable=True)
     event_date = db.Column(db.String(20), nullable=False)
     
-    # --- NEW: Relationship to Registrations ---
-    # This links an Event to its registrations
+    # --- Relationship to Registrations ---
     registrations = db.relationship('Registration', backref='event', lazy=True)
 
-# --- NEW: Registration Database Model (for SERS-6) ---
+# --- Registration Database Model ---
 class Registration(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     student_name = db.Column(db.String(100), nullable=False)
@@ -43,14 +42,14 @@ def create_app():
         all_events = Event.query.all()
         return render_template('student_dashboard.html', events=all_events)
 
-    # --- NEW: Event Details Page (SERS-5) ---
+    # --- Event Details Page (SERS-5) ---
     @app.route('/event/<int:event_id>')
     def event_details(event_id):
         # Find the event by its ID or show a 404 error
         event = db.get_or_404(Event, event_id)
         return render_template('event_details.html', event=event)
 
-    # --- NEW: Registration Page (SERS-6) ---
+    # --- Registration Page (SERS-6) ---
     @app.route('/register/<int:event_id>', methods=['POST'])
     def register(event_id):
         # Find the event this registration is for
@@ -67,8 +66,7 @@ def create_app():
         db.session.add(new_registration)
         db.session.commit()
         
-        # --- NEW: Mock Email Confirmation (SERS-7) ---
-        # This prints to your terminal, satisfying the requirement
+        # --- Mock Email Confirmation (SERS-7) ---
         print("--- MOCK EMAIL SENT ---")
         print(f"To: {new_registration.student_email}")
         print(f"Subject: Confirmation for {event.title}")
@@ -78,7 +76,7 @@ def create_app():
         # Redirect to a "success" page
         return redirect(url_for('registration_success'))
 
-    # --- NEW: Registration Success Page ---
+    # --- Registration Success Page ---
     @app.route('/register/success')
     def registration_success():
         return render_template('registration_success.html')
@@ -119,6 +117,19 @@ def create_app():
         
         return render_template('create_event.html')
 
+    # --- NEW: Admin View Registrations (SERS-3) ---
+    # This is the new function, placed in the correct location
+    @app.route('/admin/registrations')
+    def admin_registrations():
+        # This queries your database for all registrations
+        # and joins them with the Event data.
+        all_registrations = Registration.query.join(Event).order_by(Event.event_date).all()
+        
+        # This sends that "live data" to your new HTML page
+        return render_template('admin_registrations.html', registrations=all_registrations)
+    # -----------------------------------------------
+
+    # This "return app" line MUST be the last line inside create_app()
     return app
 
 if __name__ == '__main__':
