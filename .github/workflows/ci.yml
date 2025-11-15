@@ -28,5 +28,5 @@ jobs:
     # Step 4: Run your TDD tests
     - name: Run Pytest
       run: |
-        # UPDATED: This now *only* runs pytest files, ignoring Selenium
-        python -m pytest test_
+        # UPDATED: This now runs pytest but IGNORES the selenium test
+        python -m pytest --ignore=test_functional_selenium.py
