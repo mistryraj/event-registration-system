@@ -15,21 +15,25 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Python 3.10
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
           cache: 'pip'
 
-      - name: Install Chrome + ChromeDriver
+      # ────────────────────── BEST & RELIABLE WAY FOR CHROME + DRIVER ──────────────────────
+      - name: Setup Chrome + ChromeDriver (100% compatible)
+        uses: browser-actions/setup-chrome@v1
+        with:
+          chrome-version: stable
+
+      - name: Install ChromeDriver (auto-matched)
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y google-chrome-stable > /dev/null 2>&1
-          CHROME_VERSION=$(google-chrome --version | cut -d " " -f3 | cut -d "." -f1-3)
-          DRIVER_VERSION=$(wget -qO- https://chromedriver.storage.googleapis.com/LATEST_RELEASE_$CHROME_VERSION)
-          wget -qO /tmp/chromedriver.zip https://chromedriver.storage.googleapis.com/$DRIVER_VERSION/chromedriver_linux64.zip
-          unzip -q /tmp/chromed Ferrari.zip -d /tmp/
-          sudo mv /tmp/chromedriver /usr/bin/chromedriver
+          CHROME_VERSION=$(google-chrome --version | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
+          DRIVER_VERSION=$(curl -s https://chromedriver.storage.googleapis.com/LATEST_RELEASE_$CHROME_VERSION)
+          wget -q https://chromedriver.storage.googleapis.com/$DRIVER_VERSION/chromedriver_linux64.zip
+          unzip chromedriver_linux64.zip
+          sudo mv chromedriver /usr/bin/chromedriver
           sudo chmod +x /usr/bin/chromedriver
 
       - name: Install dependencies
@@ -37,28 +41,22 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      # Run pytest first (your 6 unit/integration tests)
-      - name: Run pytest
-        run: |
-          pytest -v
+      - name: Run pytest (unit + integration tests)
+        run: pytest -v
 
-      # Run Selenium E2E test
-      - name: Run Selenium E2E Test
-        run: |
-          python test_functional_selenium.py
+      - name: Run Selenium End-to-End Test
+        run: python test_functional_selenium.py
 
-      # Security scan — only after dependencies are installed and code is present
-      - name: Run Bandit Security Scan
+      - name: Bandit Security Scan (non-blocking)
         continue-on-error: true
         run: |
           pip install bandit
-          bandit -r app.py tests/ -f html -o bandit-report.html || echo "Bandit completed (some issues may exist)"
+          bandit -r app.py tests/ -f html -o bandit-report.html || true
 
-      # Upload report only if it was created
-      - name: Upload Bandit Report
+      - name: Upload Security Report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: security-report
           path: bandit-report.html
-          if-no-files-found: ignore   # This prevents the "No files found" error
+          if-no-files-found: ignore
