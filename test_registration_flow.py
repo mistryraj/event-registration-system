@@ -1,3 +1,6 @@
+import pytest
+from app import create_app, db, Event, Registration
+
 # This test will check SERS-5, SERS-6, and SERS-7
 def test_full_registration_flow(client):
     """
