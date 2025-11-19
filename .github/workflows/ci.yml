@@ -35,7 +35,7 @@ jobs:
         
       - name: Security Scan (Bandit)
         continue-on-error: true
-        run: bandit -r . -f text
+        run: bandit -r . -f txt
 
   tests:
     name: Unit Tests

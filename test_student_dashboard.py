@@ -1,6 +1,3 @@
-import pytest
-from app import create_app, db, Event # Import db and Event
-
 # TEST 1: Test that the student page loads when NO events exist
 def test_student_dashboard_empty(client):
     response = client.get('/')
