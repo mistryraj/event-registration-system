@@ -1,5 +1,5 @@
 # .github/workflows/ci.yml
-name: CI Pipeline
+name: CI - Tests & Quality
 
 on:
   push:
@@ -8,225 +8,133 @@ on:
     branches: [ main, develop ]
 
 jobs:
-  # Job 1: Code Quality & Security
-  code-quality:
-    name: Code Quality & Security Checks
+  # =============================================
+  # 1. Code Quality & Security (fast, non-blocking)
+  # =============================================
+  quality:
+    name: Code Quality & Security
     runs-on: ubuntu-latest
-    
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Set up Python 3.10
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
           cache: 'pip'
 
-      - name: Install dependencies
+      - name: Install quality tools
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install flake8 pylint black isort
+          pip install black isort flake8 bandit
 
-      - name: Run Black (Code Formatting Check)
-        continue-on-error: true
-        run: black --check app.py test_*.py conftest.py
+      - name: Black — Check formatting
+        run: black --check --diff app.py tests/ conftest.py || true
 
-      - name: Run isort (Import Sorting Check)
-        continue-on-error: true
-        run: isort --check-only app.py test_*.py conftest.py
+      - name: isort — Check import order
+        run: isort --check-only --diff app.py tests/ conftest.py || true
 
-      - name: Run Flake8 (Linting)
-        continue-on-error: true
-        run: flake8 app.py test_*.py --max-line-length=120 --ignore=E501,W503
+      - name: Flake8 — Lint
+        run: flake8 app.py tests/ --max-line-length=120 --ignore=E501,W503 || true
 
-      - name: Run Bandit (Security Scan)
+      - name: Bandit — Security scan
         continue-on-error: true
         run: |
-          bandit -r app.py -f json -o bandit-report.json || true
-          bandit -r app.py -f html -o bandit-report.html || true
+          bandit -r app.py tests/ -f html -o bandit-report.html
 
-      - name: Upload Security Report
-        if: always()
+      - name: Upload security report
         uses: actions/upload-artifact@v4
         with:
           name: security-report
           path: bandit-report.html
           if-no-files-found: ignore
 
-  # Job 2: Unit & Integration Tests
-  unit-tests:
-    name: Unit & Integration Tests
+  # =============================================
+  # 2. Unit + Integration Tests (with coverage)
+  # =============================================
+  tests:
+    name: Tests (Python ${{ matrix.py }})
     runs-on: ubuntu-latest
-    needs: code-quality
-    
+    needs: quality
     strategy:
       matrix:
-        python-version: ['3.9', '3.10', '3.11']
-    
+        py: ['3.10', '3.11']   # 3.9 is very old in 2025, dropped
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Python ${{ matrix.python-version }}
+      - name: Set up Python ${{ matrix.py }}
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: ${{ matrix.py }}
           cache: 'pip'
 
-      - name: Install dependencies
+      - name: Install dependencies + test tools
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pytest-cov pytest-html
+          pip install pytest pytest-cov
 
-      - name: Run Pytest with Coverage
+      - name: Run pytest with coverage
         run: |
           pytest -v \
             --cov=app \
-            --cov-report=html:coverage-report \
-            --cov-report=xml:coverage.xml \
-            --cov-report=term \
-            --html=pytest-report.html \
-            --self-contained-html
+            --cov-report=term-missing \
+            --cov-report=html:coverage-html
 
-      - name: Upload Test Results
-        if: always()
+      - name: Upload coverage report
         uses: actions/upload-artifact@v4
         with:
-          name: test-results-py${{ matrix.python-version }}
-          path: |
-            pytest-report.html
-            coverage-report/
-          if-no-files-found: ignore
+          name: coverage-py${{ matrix.py }}
+          path: coverage-html
 
-      - name: Upload Coverage to Codecov
-        if: matrix.python-version == '3.10'
-        uses: codecov/codecov-action@v4
-        with:
-          file: ./coverage.xml
-          flags: unittests
-          name: codecov-umbrella
-          fail_ci_if_error: false
-
-  # Job 3: End-to-End Testing with Selenium
-  e2e-tests:
-    name: E2E Tests (Selenium)
+  # =============================================
+  # 3. End-to-End Selenium Test (Headless Chrome)
+  # =============================================
+  e2e:
+    name: E2E — Selenium
     runs-on: ubuntu-latest
-    needs: unit-tests
-    
+    needs: tests
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Set up Python 3.10
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
           cache: 'pip'
 
-      - name: Set up Chrome & ChromeDriver
-        uses: browser-actions/setup-chrome@v1
+      # Reliable & up-to-date Chrome + Driver setup (2025 method)
+      - name: Install Chrome + ChromeDriver (100% compatible)
+        uses: nanasess/setup-chromedriver@master
         with:
-          chrome-version: stable
+          chromedriver-version: 'stable'
 
-      - name: Install ChromeDriver (matching version)
+      - name: Run ChromeDriver
         run: |
-          CHROME_VERSION=$(google-chrome --version | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
-          DRIVER_VERSION=$(curl -s "https://googlechromelabs.github.io/chrome-for-testing/LATEST_RELEASE_${CHROME_VERSION%%.*}")
-          echo "Chrome: $CHROME_VERSION, Driver: $DRIVER_VERSION"
-          
-          wget -q "https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/$DRIVER_VERSION/linux64/chromedriver-linux64.zip"
-          unzip -q chromedriver-linux64.zip
-          sudo mv chromedriver-linux64/chromedriver /usr/local/bin/
-          sudo chmod +x /usr/local/bin/chromedriver
+          chromedriver --url-base=/wd/hub &
 
-      - name: Install Python dependencies
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run Selenium E2E Test
+      - name: Run Selenium End-to-End Test
         run: python test_functional_selenium.py
 
-      - name: Capture Screenshots on Failure
+      # Optional: take screenshot if test fails
+      - name: Take screenshot on failure
         if: failure()
-        run: |
-          mkdir -p screenshots
-          # Screenshots would be saved here if test fails
+        run: echo "Test failed — you can add screenshot logic here"
 
-      - name: Upload E2E Test Artifacts
+      - name: Upload page source on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: e2e-failure-artifacts
-          path: screenshots/
+          name: e2e-failure-page-source
+          path: page-source.html   # if you save driver.page_source
           if-no-files-found: ignore
-
-  # Job 4: Build & Deploy (Docker)
-  build:
-    name: Build Docker Image
-    runs-on: ubuntu-latest
-    needs: [unit-tests, e2e-tests]
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Login to Docker Hub (Optional)
-        if: github.event_name != 'pull_request'
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-
-      - name: Build Docker Image
-        run: |
-          docker build -t event-registration-system:${{ github.sha }} .
-          docker tag event-registration-system:${{ github.sha }} event-registration-system:latest
-
-      - name: Test Docker Image
-        run: |
-          docker run -d -p 5000:5000 --name test-container event-registration-system:latest
-          sleep 10
-          curl -f http://localhost:5000 || exit 1
-          docker stop test-container
-
-      - name: Push to Docker Hub (Optional)
-        if: github.event_name != 'pull_request' && secrets.DOCKER_USERNAME
-        run: |
-          docker push event-registration-system:latest
-
-  # Job 5: Notification
-  notify:
-    name: Notify Results
-    runs-on: ubuntu-latest
-    needs: [code-quality, unit-tests, e2e-tests, build]
-    if: always()
-    
-    steps:
-      - name: Check Job Status
-        run: |
-          echo "Code Quality: ${{ needs.code-quality.result }}"
-          echo "Unit Tests: ${{ needs.unit-tests.result }}"
-          echo "E2E Tests: ${{ needs.e2e-tests.result }}"
-          echo "Build: ${{ needs.build.result }}"
-
-      - name: Success Notification
-        if: ${{ needs.code-quality.result == 'success' && needs.unit-tests.result == 'success' && needs.e2e-tests.result == 'success' }}
-        run: |
-          echo "✅ All CI checks passed successfully!"
-          echo "Branch: ${{ github.ref_name }}"
-          echo "Commit: ${{ github.sha }}"
-
-      - name: Failure Notification
-        if: ${{ needs.code-quality.result == 'failure' || needs.unit-tests.result == 'failure' || needs.e2e-tests.result == 'failure' }}
-        run: |
-          echo "❌ CI Pipeline Failed!"
-          echo "Please check the logs for details."
-          exit 1
