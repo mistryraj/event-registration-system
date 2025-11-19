@@ -1,73 +1,61 @@
+# test_functional_selenium.py
 import time
 import threading
-from app import create_app
+from app import create_app, db, Event
 from selenium import webdriver
-# --- NEW: Import the Service class ---
-from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.by import By
 
-# --- IMPORTANT: CHANGE THIS ---
-# Make sure this matches the driver file you downloaded
-DRIVER_PATH = './chromedriver.exe' 
-# -----------------------------
-
+# Start Flask app in background
 def run_app():
-    """Starts the Flask app in a separate thread."""
     app = create_app()
-    app.run(debug=False, use_reloader=False, host='localhost', port=5000)
+    with app.app_context():
+        db.create_all()
+    app.run(port=5000, use_reloader=False, debug=False, threaded=True)
 
-# 1. Start the Flask app in the background
 threading.Thread(target=run_app, daemon=True).start()
-print("Waiting for Flask app to start (2 seconds)...")
-time.sleep(2) # Give the server a second to start
+time.sleep(4)  # Give server time to start
 
-# 2. Initialize the Selenium driver
-print("Initializing Selenium Web Driver...")
-# --- UPDATED: This is the new, correct way to start Chrome ---
-driver = webdriver.Chrome(service=Service(DRIVER_PATH))
+# Headless Chrome (perfect for GitHub Actions)
+options = Options()
+options.add_argument("--headless")
+options.add_argument("--no-sandbox")
+options.add_argument("--disable-dev-shm-usage")
+options.add_argument("--disable-gpu")
+options.add_argument("--window-size=1920,1080")
 
-print("Driver initialized. Running test...")
+driver = webdriver.Chrome(options=options)
 
 try:
-    # 3. Go to the website
-    driver.get('http://localhost:5000/')
-    print("ACTION: Went to home page.")
-    time.sleep(1)
+    driver.get("http://127.0.0.1:5000")
+    print("Opened student dashboard")
 
-    # 4. Find the first event and click it
-    # We must have an event in the DB for this to work
-    # Please run the app and create one event as an admin first.
-    first_event = driver.find_element("class name", "event-card")
-    first_event.click()
-    print("ACTION: Clicked on the first event.")
-    time.sleep(1)
+    # Auto-create one event if none exists
+    app = create_app()
+    with app.app_context():
+        if Event.query.count() == 0:
+            db.session.add(Event(title="CI Test Event", description="Auto-created", event_date="2025-12-25"))
+            db.session.commit()
 
-    # 5. We are on the details page. Fill out the form
-    driver.find_element("id", "name").send_keys("Test Student Selenium")
-    driver.find_element("id", "email").send_keys("selenium@test.com")
-    print("ACTION: Filled out registration form.")
-    time.sleep(1)
+    driver.refresh()
+    time.sleep(2)
 
-    # 6. Click the "Register" button
-    driver.find_element("tag name", "button").click()
-    print("ACTION: Clicked 'Register'.")
-    time.sleep(1)
+    driver.find_element(By.CLASS_NAME, "event-card").click()
+    print("Clicked event card")
 
-    # 7. Check if we are on the success page
-    success_message = driver.find_element("tag name", "h1").text
-    
-    if "Registration Successful!" in success_message:
-        print("---------------------------------")
-        print("✅ TEST PASSED - Selenium test successful!")
-        print("---------------------------------")
-    else:
-        print("---------------------------------")
-        print("❌ TEST FAILED - 'Registration Successful!' message not found.")
-        print("---------------------------------")
+    driver.find_element(By.ID, "name").send_keys("GitHub CI User")
+    driver.find_element(By.ID, "email").send_keys("ci@example.com")
+    driver.find_element(By.TAG_NAME, "button").click()
+    print("Submitted registration")
+
+    time.sleep(2)
+    h1_text = driver.find_element(By.TAG_NAME, "h1").text
+    assert "Registration Successful" in h1_text
+    print("E2E TEST PASSED SUCCESSFULLY!")
 
 except Exception as e:
-    print(f"❌ TEST FAILED with error: {e}")
+    print(f"E2E TEST FAILED: {e}")
+    raise
 
 finally:
-    # 8. Close the browser
     driver.quit()
-    print("Test finished. Browser closed.")

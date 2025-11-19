@@ -1,32 +1,59 @@
-# This is your Continuous Integration (CI) workflow file
-name: Python CI
+# .github/workflows/ci.yml
+name: CI - Tests
 
-# This tells GitHub to run this workflow on every 'push'
-on: [push]
+on:
+  push:
+    branches: [ main, develop, feature/* ]
+  pull_request:
+    branches: [ main ]
 
 jobs:
-  build:
-    # This job will run on a new virtual machine (Ubuntu)
+  tests:
     runs-on: ubuntu-latest
-    
+
     steps:
-    # Step 1: Checks out your code from GitHub
-    - uses: actions/checkout@v3
-    
-    # Step 2: Sets up a Python 3.10 environment
-    - name: Set up Python 3.10
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.10'
-        
-    # Step 3: Installs your project's libraries
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        
-    # Step 4: Run your TDD tests
-    - name: Run Pytest
-      run: |
-        # UPDATED: This now runs pytest but IGNORES the selenium test
-        python -m pytest --ignore=test_functional_selenium.py
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+
+      - name: Install Chrome + ChromeDriver (automatically matched)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y google-chrome-stable
+          CHROME_VERSION=$(google-chrome --version | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+          DRIVER_VERSION=$(wget -qO- "https://chromedriver.storage.googleapis.com/LATEST_RELEASE_$CHROME_VERSION")
+          wget -O /tmp/chromedriver.zip https://chromedriver.storage.googleapis.com/$DRIVER_VERSION/chromedriver_linux64.zip
+          unzip /tmp/chromedriver.zip -d /tmp/
+          sudo mv /tmp/chromedriver /usr/bin/chromedriver
+          sudo chmod +x /usr/bin/chromedriver
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run Unit & Integration Tests (pytest)
+        run: |
+          pytest -v
+
+      - name: Run Selenium End-to-End Test (Headless)
+        run: |
+          python test_functional_selenium.py
+
+      - name: Security Scan (optional but recommended)
+        continue-on-error: true
+        run: |
+          pip install bandit
+          bandit -r . -f html -o bandit-report.html || echo "Security issues found (non-blocking)"
+
+      - name: Upload Security Report
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: security-scan-report
+          path: bandit-report.html
