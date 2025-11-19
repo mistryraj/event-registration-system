@@ -21,14 +21,14 @@ jobs:
           python-version: '3.10'
           cache: 'pip'
 
-      - name: Install Chrome + ChromeDriver (automatically matched)
+      - name: Install Chrome + ChromeDriver (auto-matched version)
         run: |
-          sudo apt-get update
-          sudo apt-get install -y google-chrome-stable
+          sudo apt-get update -qq
+          sudo apt-get install -y google-chrome-stable > /dev/null 2>&1
           CHROME_VERSION=$(google-chrome --version | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
-          DRIVER_VERSION=$(wget -qO- "https://chromedriver.storage.googleapis.com/LATEST_RELEASE_$CHROME_VERSION")
-          wget -O /tmp/chromedriver.zip https://chromedriver.storage.googleapis.com/$DRIVER_VERSION/chromedriver_linux64.zip
-          unzip /tmp/chromedriver.zip -d /tmp/
+          DRIVER_VERSION=$(wget -qO- "https://chromedriver.storage.googleapis.com/LATEST_RELEASE_$CHROME_VERSION" -)
+          wget -qO /tmp/chromedriver.zip https://chromedriver.storage.googleapis.com/$DRIVER_VERSION/chromedriver_linux64.zip
+          unzip -q /tmp/chromedriver.zip -d /tmp/
           sudo mv /tmp/chromedriver /usr/bin/chromedriver
           sudo chmod +x /usr/bin/chromedriver
 
@@ -45,15 +45,16 @@ jobs:
         run: |
           python test_functional_selenium.py
 
-      - name: Security Scan (optional but recommended)
+      - name: Security Scan with Bandit (optional, non-blocking)
         continue-on-error: true
         run: |
           pip install bandit
-          bandit -r . -f html -o bandit-report.html || echo "Security issues found (non-blocking)"
+          bandit -r . -f html -o bandit-report.html || echo "Bandit found issues (non-blocking)"
 
-      - name: Upload Security Report
+      - name: Upload Bandit Security Report
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4   # ← Fixed to v4
         with:
-          name: security-scan-report
+          name: security-report
           path: bandit-report.html
+          retention-days: 7
