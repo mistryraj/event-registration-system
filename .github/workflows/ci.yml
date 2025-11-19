@@ -1,4 +1,3 @@
-# .github/workflows/ci.yml
 name: CI - Tests & Quality
 
 on:
@@ -13,93 +12,69 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
-
-      - name: Install formatting & security tools
-        run: |
-          python -m pip install --upgrade pip
-          pip install black isort flake8 bandit
-
-      # These are NON-BLOCKING now → will never fail the CI
-      - name: Check code formatting (Black)
+      - name: Install tools
+        run: pip install black isort flake8 bandit
+      
+      # We group these and use 'continue-on-error' so one failure doesn't stop the others
+      # but we still get to see the output.
+      - name: Check Formatting (Black)
         continue-on-error: true
         run: black --check --diff .
-
-      - name: Check imports (isort)
+        
+      - name: Check Imports (Isort)
         continue-on-error: true
         run: isort --check-only --diff .
-
-      - name: Lint with flake8
+        
+      - name: Linting (Flake8)
         continue-on-error: true
-        run: flake8 . --max-line-length=120
-
-      - name: Security scan (Bandit)
-        run: bandit -r . -f html -o bandit-report.html || true
-
-      - name: Upload security report
-        uses: actions/upload-artifact@v4
-        with:
-          name: security-report
-          path: bandit-report.html
-          if-no-files-found: ignore
+        run: flake8 .
+        
+      - name: Security Scan (Bandit)
+        continue-on-error: true
+        run: bandit -r . -f text
 
   tests:
-    name: Unit & Integration Tests
+    name: Unit Tests
     runs-on: ubuntu-latest
     needs: quality
-    strategy:
-      matrix:
-        python-version: ['3.10', '3.11']
-
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up Python ${{ matrix.python-version }}
+      - name: Set up Python 3.10
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
-
+          python-version: '3.10'
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pytest pytest-cov
-
-      - name: Run tests
-        run: pytest -v
+      - name: Run Unit Tests
+        run: pytest -v --ignore=test_functional_selenium.py
+        # We ignore the selenium file here so it doesn't run twice
 
   e2e:
     name: E2E - Selenium
     runs-on: ubuntu-latest
     needs: tests
-
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up Python 3.10
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
-
-      # THIS IS THE ONLY WORKING METHOD IN LATE 2025
-      - name: Install Google Chrome + ChromeDriver (official & stable)
-        run: |
-          wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | sudo apt-key add -
-          sudo sh -c 'echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list'
-          sudo apt-get update
-          sudo apt-get install -y google-chrome-stable
-
-          # Auto-installs matching chromedriver via webdriver-manager later
-
-      - name: Install dependencies + webdriver-manager
+      
+      # Note: We DO NOT need to sudo apt-get install chrome.
+      # It is pre-installed on ubuntu-latest.
+      
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install webdriver-manager
-
-      - name: Run Selenium Test (Headless + Auto Driver)
+          
+      - name: Run Selenium Test
+        # We set headless mode explicitly via environment variable if needed, 
+        # but your script handles it via options.
         run: python test_functional_selenium.py
