@@ -8,40 +8,37 @@ on:
     branches: [ main, develop ]
 
 jobs:
-  # =============================================
-  # 1. Code Quality & Security (fast, non-blocking)
-  # =============================================
   quality:
     name: Code Quality & Security
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Python 3.10
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
-          cache: 'pip'
 
-      - name: Install quality tools
+      - name: Install formatting & security tools
         run: |
           python -m pip install --upgrade pip
           pip install black isort flake8 bandit
 
-      - name: Black — Check formatting
-        run: black --check --diff app.py tests/ conftest.py || true
-
-      - name: isort — Check import order
-        run: isort --check-only --diff app.py tests/ conftest.py || true
-
-      - name: Flake8 — Lint
-        run: flake8 app.py tests/ --max-line-length=120 --ignore=E501,W503 || true
-
-      - name: Bandit — Security scan
+      # These are NON-BLOCKING now → will never fail the CI
+      - name: Check code formatting (Black)
         continue-on-error: true
-        run: |
-          bandit -r app.py tests/ -f html -o bandit-report.html
+        run: black --check --diff .
+
+      - name: Check imports (isort)
+        continue-on-error: true
+        run: isort --check-only --diff .
+
+      - name: Lint with flake8
+        continue-on-error: true
+        run: flake8 . --max-line-length=120
+
+      - name: Security scan (Bandit)
+        run: bandit -r . -f html -o bandit-report.html || true
 
       - name: Upload security report
         uses: actions/upload-artifact@v4
@@ -50,91 +47,59 @@ jobs:
           path: bandit-report.html
           if-no-files-found: ignore
 
-  # =============================================
-  # 2. Unit + Integration Tests (with coverage)
-  # =============================================
   tests:
-    name: Tests (Python ${{ matrix.py }})
+    name: Unit & Integration Tests
     runs-on: ubuntu-latest
     needs: quality
     strategy:
       matrix:
-        py: ['3.10', '3.11']   # 3.9 is very old in 2025, dropped
+        python-version: ['3.10', '3.11']
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Python ${{ matrix.py }}
+      - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.py }}
-          cache: 'pip'
-
-      - name: Install dependencies + test tools
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pytest pytest-cov
-
-      - name: Run pytest with coverage
-        run: |
-          pytest -v \
-            --cov=app \
-            --cov-report=term-missing \
-            --cov-report=html:coverage-html
-
-      - name: Upload coverage report
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-py${{ matrix.py }}
-          path: coverage-html
-
-  # =============================================
-  # 3. End-to-End Selenium Test (Headless Chrome)
-  # =============================================
-  e2e:
-    name: E2E — Selenium
-    runs-on: ubuntu-latest
-    needs: tests
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Python 3.10
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
-          cache: 'pip'
-
-      # Reliable & up-to-date Chrome + Driver setup (2025 method)
-      - name: Install Chrome + ChromeDriver (100% compatible)
-        uses: nanasess/setup-chromedriver@master
-        with:
-          chromedriver-version: 'stable'
-
-      - name: Run ChromeDriver
-        run: |
-          chromedriver --url-base=/wd/hub &
+          python-version: ${{ matrix.python-version }}
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+          pip install pytest pytest-cov
 
-      - name: Run Selenium End-to-End Test
-        run: python test_functional_selenium.py
+      - name: Run tests
+        run: pytest -v
 
-      # Optional: take screenshot if test fails
-      - name: Take screenshot on failure
-        if: failure()
-        run: echo "Test failed — you can add screenshot logic here"
+  e2e:
+    name: E2E - Selenium
+    runs-on: ubuntu-latest
+    needs: tests
 
-      - name: Upload page source on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
         with:
-          name: e2e-failure-page-source
-          path: page-source.html   # if you save driver.page_source
-          if-no-files-found: ignore
+          python-version: '3.10'
+
+      # THIS IS THE ONLY WORKING METHOD IN LATE 2025
+      - name: Install Google Chrome + ChromeDriver (official & stable)
+        run: |
+          wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | sudo apt-key add -
+          sudo sh -c 'echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list'
+          sudo apt-get update
+          sudo apt-get install -y google-chrome-stable
+
+          # Auto-installs matching chromedriver via webdriver-manager later
+
+      - name: Install dependencies + webdriver-manager
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install webdriver-manager
+
+      - name: Run Selenium Test (Headless + Auto Driver)
+        run: python test_functional_selenium.py
