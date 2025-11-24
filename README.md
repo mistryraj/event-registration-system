@@ -30,7 +30,9 @@ The project follows Agile Scrum methodology, Test-Driven Development (TDD), and 
   - Linting
   - Security checks
   - Build verification
-- Head Selenium execution for CI compatibility
+- Used both Head and Headless Testing
+- Head (For Local Machine)
+- Headless (For GitHub Actions) 
 
 ---
 
