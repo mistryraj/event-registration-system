@@ -1,6 +1,6 @@
 # Smart Event Registration System (SERS)
 
-A Flask-based web application that allows administrators to create and manage events and enables students to view and register for them.  
+A Flask-based web application that allows the admin to create and manage events and enables students to view and register for the events.  
 The project follows Agile Scrum methodology, Test-Driven Development (TDD), and Continuous Integration using GitHub Actions.
 
 ---
@@ -17,13 +17,12 @@ The project follows Agile Scrum methodology, Test-Driven Development (TDD), and 
 - View all upcoming events
 - Read event details
 - Register for events
-- Receive registration confirmation (console log)
+- Receive confirmation email
 
 ### Testing
 - Pytest-based unit tests
 - Integration and route tests
 - Selenium end-to-end browser tests
-- More than 95 percent code coverage
 
 ### CI
 - GitHub Actions pipeline running:
@@ -31,7 +30,7 @@ The project follows Agile Scrum methodology, Test-Driven Development (TDD), and 
   - Linting
   - Security checks
   - Build verification
-- Headless Selenium execution for CI compatibility
+- Head Selenium execution for CI compatibility
 
 ---
 
@@ -130,19 +129,14 @@ http://localhost:5000
 pytest -v
 ```
 
-### Run all tests with coverage
-```
-pytest -v --cov=app --cov-report=html
-```
-
 ### Run Selenium functional test
 ```
-pytest tests/test_functional_selenium.py
+python -m test_functional_selenium.py
 ```
 
 ---
 
-## CI/CD Pipeline (GitHub Actions)
+## CI Pipeline (GitHub Actions)
 
 The pipeline includes:
 - Python version matrix (3.9, 3.10, 3.11)
@@ -155,41 +149,4 @@ The pipeline includes:
 All pipeline checks are currently passing.
 
 ---
-
-## SOLID Principles Applied
-
-- Single Responsibility: Routes and models are strictly separated in scope.
-- Open/Closed: New features were added in Sprint 2 without modifying Sprint 1 logic.
-- Liskov Substitution: SQLAlchemy models work uniformly with db.session operations.
-- Interface Segregation: Models contain only necessary fields and logic.
-- Dependency Inversion: Database operations rely on SQLAlchemy abstractions.
-
----
-
-## Agile Metrics
-
-- Story Points Completed: 35
-- Two sprints executed
-  - Sprint 1: 12 story points
-  - Sprint 2: 23 story points
-- Average Velocity: 17.5 SP per sprint
-- Test Coverage: 95 percent or more
-- Build Success Rate: 100 percent
-
----
-
-## Technical Challenges and Solutions
-
-1. Test interference and database locking  
-   Solution: In-memory SQLite database and isolated fixtures using conftest.py.
-
-2. Selenium failures in CI (headless execution issues)  
-   Solution: Automatic environment detection and forced headless mode inside CI.
-
-3. Chrome driver version mismatches  
-   Solution: webdriver-manager integration to auto-download correct drivers.
-
-4. Deprecation warnings for datetime.utcnow()  
-   Solution: Replaced with timezone-aware datetime.now(timezone.utc).
-
 
